@@ -109,6 +109,15 @@ section.part { min-width: 0; display: flex; flex-direction: column; gap: 22px; }
 .reading ul { margin: 0 0 12px; padding-left: 20px; }
 .reading li { margin-bottom: 6px; }
 .reading figure.obra { margin: 20px 0 8px; max-width: 420px; }
+.extra figure.obra { margin: 4px 0 14px; }
+figure.obra img { cursor: zoom-in; }
+.visor { position: fixed; inset: 0; z-index: 50; background: rgba(15, 15, 18, .92); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; cursor: zoom-out; }
+.visor img { max-width: 100%; max-height: calc(100vh - 120px); object-fit: contain; border-radius: 4px; }
+.visor p { font-family: var(--f-ui); font-size: 14px; line-height: 1.45; color: #e8e6e1; max-width: 720px; text-align: center; margin: 0; }
+.visor p a { color: #fff; }
+.visor button { position: absolute; top: 12px; right: 12px; font: inherit; font-family: var(--f-ui); font-size: 15px; color: #fff; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.3); border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+.extra figure.obra img { display: block; width: 100%; height: auto; border-radius: 4px; border: 1px solid var(--line); }
+.extra figure.obra figcaption { font-family: var(--f-ui); font-size: 14px; line-height: 1.45; color: var(--muted); margin-top: 8px; }
 .reading figure.obra img { display: block; width: 100%; height: auto; border-radius: 4px; border: 1px solid var(--line); }
 .reading figure.obra figcaption { font-family: var(--f-ui); font-size: 14px; line-height: 1.45; color: var(--muted); margin-top: 8px; }
 .reading blockquote { margin: 8px 0 14px; padding-left: 14px; border-left: 2px solid var(--grana); font-style: italic; }
@@ -162,6 +171,12 @@ button.btn.danger { background: var(--bad); border-color: var(--bad); color: #ff
 
 .pick { font-family: var(--f-read); font-size: 18px; line-height: 2; background: var(--paper); border-radius: 6px; padding: 12px 14px; }
 .pick .stanza { margin-bottom: 10px; }
+.ord { display: flex; flex-wrap: wrap; gap: 8px; background: var(--paper); border: 1px dashed var(--line); border-radius: 6px; padding: 12px 14px; margin: 4px 0 12px; }
+.chip { font: inherit; font-family: var(--f-read); font-size: 18px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.chip:focus-visible { outline: 2px solid var(--grana); outline-offset: 2px; }
+.chip.drag { cursor: grabbing; border-color: var(--grana); background: var(--grana-soft); }
+.chip:disabled { cursor: default; opacity: 1; }
+.ord-help { font-family: var(--f-ui); font-size: 14px; color: var(--muted); margin: 0; }
 .tok { font: inherit; background: none; border: 0; padding: 0 2px; margin: 0 -2px; position: relative; border-radius: 3px; color: var(--ink); cursor: pointer; }
 .tok:hover { background: var(--grana-soft); }
 .tok-dado { padding: 0 2px; margin: 0 -2px; border-radius: 3px; background: var(--syl-b); font-weight: 600; cursor: default; }
@@ -524,25 +539,27 @@ function tokens(line) {
 }
 const isDone = q => !!(S.r[q.id] && S.r[q.id].done);
 /* una pregunta cuenta como respondida si se guardó o, en las que se corrigen solas, si se intentó al menos una vez */
-const answered = q => { const s = S.r[q.id]; return !!s && (!!s.done || (["opcion", "numero", "rima", "silabas", "acentos", "acepcion", "corta", "oposicion"].includes(q.tipo) && s.intentos > 0)); };
+const answered = q => { const s = S.r[q.id]; return !!s && (!!s.done || (["opcion", "numero", "rima", "silabas", "acentos", "acepcion", "corta", "oposicion", "ordenar"].includes(q.tipo) && s.intentos > 0)); };
 const pendientes = i => UNIDAD.partes[i].preguntas.filter(q => !answered(q)).length;
 const unlocked = i => { for (let k = 0; k < Math.min(i, N_PARTES); k++) if (pendientes(k)) return false; return true; };
-const AUTO = ["opcion", "numero", "rima", "silabas", "acentos", "acepcion", "corta", "oposicion"];
+const AUTO = ["opcion", "numero", "rima", "silabas", "acentos", "acepcion", "corta", "oposicion", "ordenar"];
 /* ejercicio «oposicion»: marcar en q.rango los términos del lado contrario a q.dados */
 const VACIAS = ["a", "al", "de", "del", "el", "la", "lo", "los", "las", "en", "que", "si", "no", "y", "todo"];
 const esDado = (q, ln, w) => q.dados.some(d => d.v === ln && norm(d.p) === norm(w));
 function oposicionRes(q, m) {
   const ks = Object.keys(m || {});
   const hit = t => ks.some(k => +k.split("-")[0] === t.v && t.palabras.some(p => norm(p) === norm(tokWord(k))));
-  const enTermino = k => q.terminos.some(t => +k.split("-")[0] === t.v && t.palabras.some(p => norm(p) === norm(tokWord(k))));
+  const enTermino = k => q.terminos.some(t => +k.split("-")[0] === t.v && t.palabras.some(p => norm(p) === norm(tokWord(k))))
+    || (q.admitidas || []).some(d => d.v === +k.split("-")[0] && norm(d.p) === norm(tokWord(k)));
   return { found: q.terminos.filter(hit), missed: q.terminos.filter(t => !hit(t)), extra: sortKeys(ks.filter(k => !enTermino(k) && !VACIAS.includes(norm(tokWord(k))))) };
 }
+function ordText(q, o) { return (o || q.palabras.map((_, i) => i)).map(i => q.palabras[i]).join(" "); }
 function sortKeys(ks) { return ks.slice().sort((a, b) => { const [la, wa] = a.split("-").map(Number), [lb, wb] = b.split("-").map(Number); return la - lb || wa - wb; }); }
 function tokWord(k) { const [l, w] = k.split("-").map(Number); return tokens(VERSOS[l - 1])[w].w; }
 /* qué términos de la unidad encontró el alumno y qué marcó de más */
 function seleccionRes(q, m) {
   const ks = Object.keys(m || {});
-  const hit = t => ks.filter(k => +k.split("-")[0] === t.v && t.palabras.some(p => norm(p) === norm(tokWord(k))));
+  const hit = t => ks.filter(k => [t.v, ...(t.otros || [])].includes(+k.split("-")[0]) && t.palabras.some(p => norm(p) === norm(tokWord(k))));
   const used = new Set(), found = [], missed = [];
   q.terminos.forEach(t => { const h = hit(t); h.forEach(k => used.add(k)); (h.length ? found : missed).push(t); });
   return { found, missed, extra: sortKeys(ks.filter(k => !used.has(k))) };
@@ -558,6 +575,14 @@ function pickPoem(q, m, done) {
       return `${esc(t.pre)}<button class="tok ${k in m ? "on" : ""}" data-act="tok" data-q="${q.id}" data-k="${k}" aria-pressed="${k in m}" ${done ? "disabled" : ""}>${esc(t.w)}</button>${esc(t.post)}`;
     }).join(" ");
   }).join("<br>") + "</div>").join("");
+}
+/* orden fijo pero distinto en cada pregunta, para que la correcta no quede siempre en el mismo lugar */
+function orden(q) {
+  let h = 0; for (const c of UNIDAD.id + q.id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  const ix = q.opciones.map((_, i) => i);
+  const rnd = () => { h = (h + 0x6D2B79F5) >>> 0; let t = Math.imul(h ^ (h >>> 15), 1 | h); t ^= t + Math.imul(t ^ (t >>> 7), 61 | t); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  for (let i = ix.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [ix[i], ix[j]] = [ix[j], ix[i]]; }
+  return ix;
 }
 function simil(a, b) {
   const w = s => norm(s).replace(/[^a-zñ\s]/g, " ").split(/\s+/).filter(Boolean);
@@ -610,7 +635,7 @@ correo.addEventListener("input", () => { S.correo = correo.value; save(); if (S.
 function renderTabs() {
   const items = UNIDAD.partes.map((p, i) => {
     const done = p.preguntas.filter(answered).length, tot = p.preguntas.length, lk = !unlocked(i);
-    return `<button class="tab ${lk ? "locked" : ""}" data-act="nav" data-i="${i}" aria-current="${S.sec === i}" ${lk ? 'aria-disabled="true" title="Responde primero las partes anteriores"' : ""}>${i + 1}. ${esc(p.nombre)} <span class="count ${done === tot ? "full" : ""}">${done}/${tot}</span></button>`;
+    return `<button class="tab ${lk ? "locked" : ""}" data-act="nav" data-i="${i}" aria-current="${S.sec === i}" ${lk ? 'aria-disabled="true" title="Responde primero las partes anteriores"' : ""}>${i + 1}. ${esc(p.nombre)}${tot ? ` <span class="count ${done === tot ? "full" : ""}">${done}/${tot}</span>` : ""}</button>`;
   });
   const lkE = !unlocked(N_PARTES);
   items.push(`<button class="tab ${lkE ? "locked" : ""}" data-act="nav" data-i="${N_PARTES}" aria-current="${S.sec === N_PARTES}" ${lkE ? 'aria-disabled="true" title="Responde todas las preguntas para entregar"' : ""}>Entrega</button>`);
@@ -631,7 +656,7 @@ function renderQ(q) {
   if (q.requiere && !isDone(QS[q.requiere])) return `<div class="q locked-q" id="q-${q.id}"><div class="q-head"><span class="q-num">${q.n}</span><p>Pregunta bloqueada</p></div><p class="locked-msg">Se abrirá cuando respondas la pregunta ${QS[q.requiere].n}.</p></div>`;
   let body = "";
   if (q.tipo === "opcion") {
-    body = `<div class="opts">${q.opciones.map((o, i) => {
+    body = `<div class="opts">${orden(q).map(i => { const o = q.opciones[i];
       let cls = done ? "locked" : "";
       if (done && i === q.correcta) cls += " right";
       else if (done && s.sel === i) cls += " wrong";
@@ -655,6 +680,13 @@ function renderQ(q) {
       }).join(" ") + "<br>";
     }));
     body = `<p class="leyenda"><span class="tok-dado">Así</span> aparecen los términos del lado de la vigilancia. Haz clic en los del lado contrario.</p><div class="pick">${html}</div>` + feedback(q, s, 3);
+  } else if (q.tipo === "ordenar") {
+    const showSol = done && !s.ok;
+    const orden = showSol ? null : (s.orden || q.palabras.map((_, i) => i));
+    const chips = showSol ? q.soluciones[0].split(" ").map(w => `<button class="chip" disabled>${esc(w)}</button>`)
+      : orden.map(i => `<button class="chip" data-q="${q.id}" data-i="${i}" ${done ? "disabled" : ""} aria-label="${esc(q.palabras[i])}: usa las flechas para moverla">${esc(q.palabras[i])}</button>`);
+    body = quote(q) + (done ? "" : `<p class="ord-help">Arrastra las palabras para cambiarlas de lugar. Con el teclado: selecciona una y muévela con las flechas ← →.</p>`)
+      + `<div class="ord" data-q="${q.id}">${chips.join("")}</div>` + feedback(q, s, 3);
   } else if (q.tipo === "corta") {
     body = quote(q) + `<input class="txt" id="c-${q.id}" data-q="${q.id}" data-f="texto" value="${esc(s.texto || "")}" placeholder="Escribe el sujeto" autocomplete="off" ${done ? "readonly" : ""}>` + feedback(q, s, 3);
   } else if (q.tipo === "silabas") {
@@ -720,7 +752,7 @@ function renderQ(q) {
       const r = seleccionRes(q, m);
       body += `<div class="fb info"><span class="label">Palabras que vas a buscar</span>
         <p>Encontraste <strong>${r.found.length} de ${q.terminos.length}</strong>${r.found.length ? ": " + r.found.map(t => "«" + esc(t.forma) + "»").join(", ") : ""}.</p>
-        ${r.missed.length ? `<p>Te faltaron: ${r.missed.map(t => "«" + esc(t.forma) + "» (v. " + t.v + ")").join(", ")}.</p>` : ""}
+        ${r.missed.length ? `<p>Te faltaron: ${r.missed.map(t => "«" + esc(t.forma) + "» (" + (t.otros ? "vv. " + [t.v, ...t.otros].join(" y ") : "v. " + t.v) + ")").join(", ")}.</p>` : ""}
         ${(() => {
           const enNotas = k => (UNIDAD.notas || []).some(n => +k.split("-")[0] === n.v && norm(n.termino).split(/[^a-zñ]+/).includes(norm(tokWord(k))));
           const a = r.extra.filter(enNotas), b = r.extra.filter(k => !enNotas(k)), lst = ks => ks.map(k => "«" + esc(tokWord(k)) + "»").join(", ");
@@ -736,8 +768,8 @@ function renderQ(q) {
       if (!done) body += `<div class="row"><button class="btn" data-act="save" data-q="${q.id}">Guardar y ver una respuesta posible</button>${s.msg ? `<span class="fb bad">${esc(s.msg)}</span>` : ""}</div>`;
       else body += `<div class="fb info"><span class="label">Una respuesta posible</span><p class="model">Autoridades: «${esc(q.acepcion)}»</p><p>${q.explicacion}</p></div>`;
     } else if (q.opciones) {
-      const intro = q.modo === "interpretar" ? "Elige la interpretación en español moderno que corresponde al verso:" : "Elige la acepción de Autoridades que corresponde al sentido del verso:";
-      body += `<p style="margin:0">${intro}</p><div class="opts">${q.opciones.map((o, i) => {
+      const intro = q.intro || (q.modo === "interpretar" ? "Elige la interpretación en español moderno que corresponde al verso:" : "Elige la acepción de Autoridades que corresponde al sentido del verso:");
+      body += `<p style="margin:0">${intro}</p><div class="opts">${orden(q).map(i => { const o = q.opciones[i];
         let cls = done ? "locked" : "";
         if (done && i === q.correcta) cls += " right"; else if (done && s.sel === i) cls += " wrong";
         return `<label class="opt ${cls}"><input type="radio" name="${q.id}" value="${i}" ${s.sel === i ? "checked" : ""} ${done ? "disabled" : ""}><span class="${q.modo === "interpretar" ? "" : "def"}">${esc(o)}</span></label>`;
@@ -778,7 +810,7 @@ function extraCard(x) {
   const media = !v ? "" : ENVIO_URL
     ? `<div class="video"><iframe src="https://www.youtube-nocookie.com/embed/${v.id}" title="${esc(v.titulo)}" loading="lazy" allow="encrypted-media; picture-in-picture; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div>`
     : `<a class="video-link" href="https://www.youtube.com/watch?v=${v.id}" target="_blank" rel="noopener"><span class="play" aria-hidden="true"></span><span><strong>${esc(v.titulo)}</strong><br>Escuchar en YouTube</span></a>`;
-  return `<aside class="extra"><p class="extra-eyebrow">¿Sabías que…?</p><h3>${esc(x.titulo)}</h3>${x.texto}${media}</aside>`;
+  return `<aside class="extra"><p class="extra-eyebrow">¿Sabías que…?</p><h3>${esc(x.titulo)}</h3>${x.figura || ""}${x.texto}${media}</aside>`;
 }
 function feedback(q, s, max) {
   let out = "";
@@ -788,6 +820,7 @@ function feedback(q, s, max) {
       : q.tipo === "silabas" ? esc(divText(VERSOS[q.verso - 1], new Set(solB(q))))
       : q.tipo === "acepcion" ? esc(q.opciones ? q.opciones[q.correcta] : q.acepcion)
       : q.tipo === "corta" ? q.respuesta
+      : q.tipo === "ordenar" ? esc(q.soluciones[0])
       : q.tipo === "oposicion" ? q.terminos.map(t => "«" + esc(t.forma) + "»").join(", ")
       : q.tipo === "acentos" ? `sílabas ${q.tonicas.join(", ")}; endecasílabo ${q.tipoCorrecto}`
       : fmtRima(q, q.correcta);
@@ -825,6 +858,11 @@ function diag(q, s) {
     return (r.found.length ? P(`Bien: ${r.found.map(t => "«" + esc(t.forma) + "»").join(", ")}.`) : "")
       + (r.missed.length ? P(`Te ${r.missed.length === 1 ? "falta 1 elemento" : "faltan " + r.missed.length + " elementos"}. ${esc(q.pistaFalta || "")}`) : "")
       + (r.extra.length ? P(`${r.extra.map(k => "«" + esc(tokWord(k)) + "»").join(", ")} no ${r.extra.length === 1 ? "está" : "están"} del lado contrario.`) : "");
+  }
+  if (q.tipo === "ordenar") {
+    const t = " " + norm(ordText(q, s.orden)) + " ";
+    const e = (q.errores || []).find(x => !t.includes(" " + norm(x.debe) + " "));
+    return P(e ? e.porque : q.generico || "El orden todavía no es natural. Lee la frase en voz alta: ¿suena como español de hoy?");
   }
   if (q.tipo === "corta") {
     const w = norm(s.texto || "").split(/[^a-zñ]+/);
@@ -886,6 +924,10 @@ function check(q) {
     if (!Object.keys(s.marcadas || {}).length) { s.msg = "Marca al menos una palabra."; return; }
     const r = oposicionRes(q, s.marcadas);
     s.intentos = (s.intentos || 0) + 1; s.ok = !r.missed.length && !r.extra.length; s.done = s.ok || s.intentos >= 3;
+  } else if (q.tipo === "ordenar") {
+    const o = s.orden || q.palabras.map((_, i) => i);
+    if (o.every((x, i) => x === i)) { s.msg = "Mueve las palabras antes de comprobar."; return; }
+    s.intentos = (s.intentos || 0) + 1; s.ok = q.soluciones.map(norm).includes(norm(ordText(q, o))); s.done = s.ok || s.intentos >= 3;
   } else if (q.tipo === "corta") {
     const w = norm(s.texto || "").split(/[^a-zñ]+/).filter(Boolean);
     if (!w.length) { s.msg = "Escribe tu respuesta."; return; }
@@ -985,6 +1027,7 @@ function buildReport() {
       else if (q.tipo === "oposicion") L.push(`   → ${sortKeys(Object.keys(s.marcadas || {})).map(tokWord).join(", ")}`);
       else if (q.tipo === "seleccion") { const r = seleccionRes(q, s.marcadas); L.push(`   Marcó: ${sortKeys(Object.keys(s.marcadas || {})).map(tokWord).join(", ")}`, `   Encontró ${r.found.length} de ${q.terminos.length}. Faltaron: ${r.missed.map(t => t.forma).join(", ") || "ninguna"}`); }
       else if (q.tipo === "corta") L.push(`   → ${(s.texto || "").trim()}`);
+      else if (q.tipo === "ordenar") L.push(`   → ${ordText(q, s.orden)}`);
       else if (q.tipo === "acepcion") L.push(`   → ${q.opciones ? q.opciones[s.sel] : (s.texto || "").trim()}`);
       else if (q.tipo === "marcar") Object.keys(s.marcadas || {}).sort((a, b) => { const [la, wa] = a.split("-").map(Number), [lb, wb] = b.split("-").map(Number); return la - lb || wa - wb; }).forEach(k => {
         const [l, w] = k.split("-").map(Number); L.push(`   · ${tokens(VERSOS[l - 1])[w].w} (v. ${l}): ${(s.marcadas[k] || "").trim()}`);
@@ -997,6 +1040,7 @@ function renderReport() { const r = document.getElementById("report"); if (r) r.
 function renderEntrega(el) {
   const t = stats();
   const rows = UNIDAD.partes.map((p, i) => { const d = p.preguntas.filter(answered).length, tot = p.preguntas.length;
+    if (!tot) return "";
     return `<tr><td>${i + 1}. ${esc(p.nombre)}</td><td>${d}/${tot}</td><td><span class="pill ${d === tot ? "ok" : "pend"}">${d === tot ? "Completa" : "Pendiente"}</span></td></tr>`; }).join("");
   const envio = ENVIO_URL ? `
     <section class="send" aria-labelledby="sendTitle">
@@ -1034,6 +1078,44 @@ function renderNext() {
 function render() { if (!unlocked(S.sec)) S.sec = 0; renderTabs(); renderPart(); }
 
 /* ---------- eventos ---------- */
+/* ampliar los cuadros al hacer clic */
+function cierraVisor() { document.querySelector(".visor")?.remove(); document.removeEventListener("keydown", escVisor); }
+function escVisor(e) { if (e.key === "Escape") cierraVisor(); }
+document.addEventListener("click", e => {
+  const img = e.target.closest("figure.obra img");
+  if (img) {
+    const v = document.createElement("div"); v.className = "visor"; v.setAttribute("role", "dialog"); v.setAttribute("aria-label", "Imagen ampliada");
+    const cap = img.closest("figure").querySelector("figcaption");
+    v.innerHTML = `<button type="button">Cerrar ✕</button><img src="${img.src}" alt="${esc(img.alt)}">${cap ? `<p>${cap.innerHTML}</p>` : ""}`;
+    document.body.appendChild(v); document.addEventListener("keydown", escVisor); v.querySelector("button").focus();
+    return;
+  }
+  const v = e.target.closest(".visor"); if (v && !e.target.closest("a")) cierraVisor();
+});
+/* arrastrar palabras (ratón y pantalla táctil) y moverlas con el teclado */
+let arrastre = null;
+function guardaOrden(box) { const s = st(box.dataset.q); s.orden = [...box.children].map(c => +c.dataset.i); s.msg = ""; save(); }
+document.addEventListener("pointerdown", e => {
+  const c = e.target.closest(".ord .chip"); if (!c || c.disabled) return;
+  e.preventDefault(); c.setPointerCapture(e.pointerId); c.classList.add("drag"); arrastre = { c, box: c.parentNode };
+});
+document.addEventListener("pointermove", e => {
+  if (!arrastre) return;
+  const el = document.elementFromPoint(e.clientX, e.clientY)?.closest(".chip");
+  if (!el || el === arrastre.c || el.parentNode !== arrastre.box) return;
+  const r = el.getBoundingClientRect(), despues = e.clientY > r.bottom || (e.clientY >= r.top && e.clientX > r.left + r.width / 2);
+  arrastre.box.insertBefore(arrastre.c, despues ? el.nextSibling : el);
+});
+document.addEventListener("pointerup", () => {
+  if (!arrastre) return;
+  arrastre.c.classList.remove("drag"); guardaOrden(arrastre.box); arrastre = null;
+});
+document.addEventListener("keydown", e => {
+  const c = e.target.closest?.(".ord .chip"); if (!c || c.disabled || !["ArrowLeft", "ArrowRight"].includes(e.key)) return;
+  e.preventDefault();
+  const sib = e.key === "ArrowLeft" ? c.previousElementSibling : c.nextElementSibling; if (!sib) return;
+  c.parentNode.insertBefore(c, e.key === "ArrowLeft" ? sib : sib.nextSibling); c.focus(); guardaOrden(c.parentNode);
+});
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if (!b) return;
   const act = b.dataset.act, q = QS[b.dataset.q];
