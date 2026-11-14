@@ -110,6 +110,12 @@ section.part { min-width: 0; display: flex; flex-direction: column; gap: 22px; }
 .reading li { margin-bottom: 6px; }
 .reading figure.obra { margin: 20px 0 8px; max-width: 420px; }
 .extra figure.obra { margin: 4px 0 14px; }
+figure.obra img { cursor: zoom-in; }
+.visor { position: fixed; inset: 0; z-index: 50; background: rgba(15, 15, 18, .92); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; cursor: zoom-out; }
+.visor img { max-width: 100%; max-height: calc(100vh - 120px); object-fit: contain; border-radius: 4px; }
+.visor p { font-family: var(--f-ui); font-size: 14px; line-height: 1.45; color: #e8e6e1; max-width: 720px; text-align: center; margin: 0; }
+.visor p a { color: #fff; }
+.visor button { position: absolute; top: 12px; right: 12px; font: inherit; font-family: var(--f-ui); font-size: 15px; color: #fff; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.3); border-radius: 6px; padding: 6px 12px; cursor: pointer; }
 .extra figure.obra img { display: block; width: 100%; height: auto; border-radius: 4px; border: 1px solid var(--line); }
 .extra figure.obra figcaption { font-family: var(--f-ui); font-size: 14px; line-height: 1.45; color: var(--muted); margin-top: 8px; }
 .reading figure.obra img { display: block; width: 100%; height: auto; border-radius: 4px; border: 1px solid var(--line); }
@@ -1150,6 +1156,20 @@ function renderNext() {
 function render() { if (!unlocked(S.sec)) S.sec = 0; renderTabs(); renderPart(); }
 
 /* ---------- eventos ---------- */
+/* ampliar los cuadros al hacer clic */
+function cierraVisor() { document.querySelector(".visor")?.remove(); document.removeEventListener("keydown", escVisor); }
+function escVisor(e) { if (e.key === "Escape") cierraVisor(); }
+document.addEventListener("click", e => {
+  const img = e.target.closest("figure.obra img");
+  if (img) {
+    const v = document.createElement("div"); v.className = "visor"; v.setAttribute("role", "dialog"); v.setAttribute("aria-label", "Imagen ampliada");
+    const cap = img.closest("figure").querySelector("figcaption");
+    v.innerHTML = `<button type="button">Cerrar ✕</button><img src="${img.src}" alt="${esc(img.alt)}">${cap ? `<p>${cap.innerHTML}</p>` : ""}`;
+    document.body.appendChild(v); document.addEventListener("keydown", escVisor); v.querySelector("button").focus();
+    return;
+  }
+  const v = e.target.closest(".visor"); if (v && !e.target.closest("a")) cierraVisor();
+});
 /* arrastrar palabras (ratón y pantalla táctil) y moverlas con el teclado */
 let arrastre = null;
 function guardaOrden(box) { const s = st(box.dataset.q); s.orden = [...box.children].map(c => +c.dataset.i); s.msg = ""; save(); }
